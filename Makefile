@@ -16,7 +16,10 @@ ccflags-y += -Wno-unused-function
 ccflags-y += -Wno-unused
 #ccflags-y += -Wno-uninitialized
 
-GCC_VER_49 := $(shell echo `$(CC) -dumpversion | cut -f1-2 -d.` \>= 4.9 | bc )
+# Compare CC major.minor against 4.9 with sort -V (coreutils) instead of
+# bc, so a minimal build env without bc still gets the right flags.
+CC_VER := $(shell $(CC) -dumpversion 2>/dev/null | cut -f1-2 -d. )
+GCC_VER_49 := $(shell printf '%s\n%s\n' "$(CC_VER)" "4.9" | sort -V | head -1 | grep -qx "4.9" && echo 1 || echo 0)
 ifeq ($(GCC_VER_49),1)
 ccflags-y += -Wno-date-time	# Fix compile error && warning on gcc 4.9 and later
 endif
