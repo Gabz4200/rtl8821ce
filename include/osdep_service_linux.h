@@ -16,6 +16,7 @@
 #define __OSDEP_LINUX_SERVICE_H_
 
 #include <linux/version.h>
+#include <linux/string.h>
 #include <linux/spinlock.h>
 #include <linux/compiler.h>
 #include <linux/kernel.h>
