@@ -1,9 +1,31 @@
-/linux
+# Kernel module build artifacts
 *.o
+*.ko
+*.mod.c
+*.mod
 *.cmd
 *.o.d
+*.symvers
+*.order
+Module.symvers
+Module.markers
+modules.order
+.tmp_versions/
 
+# Editor backup files
+*~
+.*.swp
+.*.swo
+
+# Arch Linux package building
 src/
 pkg/
 rtl8821ce/
 *.pkg.tar
+*.pkg.tar.zst
+*.pkg.tar.xz
+
+# Local test/config files (not for distribution)
+runwpa
+wlan0dhcp
+ifcfg-wlan0

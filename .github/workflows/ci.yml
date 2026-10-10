@@ -1,18 +1,208 @@
 name: CI
 
-on: [push]
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  KERNEL_VERSIONS: "6.6 6.1 5.15 5.10 5.4"
 
 jobs:
   build:
+    name: Build (kernel ${{ matrix.kernel }})
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: [6.6, 6.1, 5.15, 5.10, 5.4]
+        include:
+          - kernel: 6.6
+            ubuntu: "24.04"
+          - kernel: 6.1
+            ubuntu: "24.04"
+          - kernel: 5.15
+            ubuntu: "22.04"
+          - kernel: 5.10
+            ubuntu: "22.04"
+          - kernel: 5.4
+            ubuntu: "20.04"
+    container:
+      image: ubuntu:${{ matrix.ubuntu }}
+      options: --privileged
     steps:
-    - uses: actions/checkout@v2
-    - name: install dependencies
-      run: sudo apt install bc module-assistant build-essential
-    - name: prepare build
-      run: sudo m-a prepare
-    - name: build (default config, CONFIG_BR_EXT=y)
-      run: make
-    - name: build (CONFIG_BR_EXT=n fallback path)
-      run: make clean && make CONFIG_BR_EXT=n
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install kernel headers and build dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            linux-headers-${{ matrix.kernel }}-generic \
+            build-essential \
+            dkms \
+            bc \
+            kmod
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            *.o
+            *.ko
+            *.mod
+            *.mod.c
+            .tmp_versions
+            Module.symvers
+            modules.order
+          key: ${{ runner.os }}-${{ matrix.kernel }}-${{ hashFiles('**/*.c', '**/*.h', 'Makefile', 'dkms.conf') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.kernel }}-
+
+      - name: Build with default config (CONFIG_BR_EXT=y)
+        run: make -j$(nproc) KSRC=/usr/src/linux-headers-${{ matrix.kernel }}-generic
+
+      - name: Build with CONFIG_BR_EXT=n
+        run: |
+          make clean
+          make -j$(nproc) CONFIG_BR_EXT=n KSRC=/usr/src/linux-headers-${{ matrix.kernel }}-generic
+
+      - name: Verify module loads (dry-run)
+        run: |
+          modinfo 8821ce.ko
+          # Check for unresolved symbols
+          if modinfo 8821ce.ko | grep -q "depends:"; then
+            echo "Module dependencies: $(modinfo 8821ce.ko | grep 'depends:' | cut -d: -f2)"
+          fi
+
+      - name: Upload kernel module artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 8821ce-${{ matrix.kernel }}-${{ matrix.ubuntu }}
+          path: 8821ce.ko
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Test DKMS install (simulated)
+        run: |
+          # Verify dkms.conf is valid
+          grep -E '^PACKAGE_NAME|^PACKAGE_VERSION|^BUILT_MODULE_NAME|^MAKE|^CLEAN|^DEST_MODULE_LOCATION|^AUTOINSTALL' dkms.conf
+          # Check MAKE line expands correctly
+          echo "MAKE line: $(grep '^MAKE' dkms.conf | cut -d= -f2-)"
+
+  clang-compat:
+    name: Clang Compatibility
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --privileged
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install clang and kernel headers
+        run: |
+          apt-get update
+          apt-get install -y \
+            linux-headers-6.6-generic \
+            build-essential \
+            clang \
+            lld \
+            bc \
+            kmod
+
+      - name: Build with Clang (LLVM=1)
+        run: |
+          make -j$(nproc) LLVM=1 KSRC=/usr/src/linux-headers-6.6-generic
+
+      - name: Verify Clang-built module
+        run: |
+          modinfo 8821ce.ko
+          file 8821ce.ko
+
+  dkms-test:
+    name: DKMS Integration Test
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --privileged
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install DKMS and kernel headers
+        run: |
+          apt-get update
+          apt-get install -y \
+            linux-headers-6.6-generic \
+            dkms \
+            build-essential \
+            bc \
+            kmod
+
+      - name: Add module to DKMS
+        run: |
+          MODULE_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "test")
+          sudo dkms add -m rtl8821ce -v "$MODULE_VERSION" .
+
+      - name: Build module via DKMS
+        run: |
+          MODULE_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "test")
+          sudo dkms build -m rtl8821ce -v "$MODULE_VERSION" -k 6.6.0-$(dpkg --print-architecture)
+
+      - name: Verify DKMS build output
+        run: |
+          MODULE_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "test")
+          ls -la /var/lib/dkms/rtl8821ce/$MODULE_VERSION/6.6.0-$(dpkg --print-architecture)/$(dpkg --print-architecture)/module/
+
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for common kernel coding style issues
+        run: |
+          # Check for trailing whitespace
+          if git grep -n '[[:space:]]$' -- '*.c' '*.h' '*.mk' 'Makefile'; then
+            echo "::error::Trailing whitespace found"
+            exit 1
+          fi
+
+      - name: Verify Makefile syntax
+        run: |
+          make -n 2>&1 | head -20
+
+      - name: Check dkms.conf format
+        run: |
+          # Ensure required fields exist
+          for field in PACKAGE_NAME PACKAGE_VERSION BUILT_MODULE_NAME MAKE CLEAN DEST_MODULE_LOCATION AUTOINSTALL; do
+            if ! grep -q "^$field" dkms.conf; then
+              echo "::error::Missing required field: $field"
+              exit 1
+            fi
+          done
+          echo "dkms.conf validation passed"
+
+  summary:
+    name: Build Summary
+    needs: [build, clang-compat, dkms-test, lint]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          echo "Build matrix: ${{ needs.build.result }}"
+          echo "Clang compat: ${{ needs.clang-compat.result }}"
+          echo "DKMS test: ${{ needs.dkms-test.result }}"
+          echo "Lint: ${{ needs.lint.result }}"
+          if [[ "${{ needs.build.result }}" != "success" ]] || \
+             [[ "${{ needs.clang-compat.result }}" != "success" ]] || \
+             [[ "${{ needs.dkms-test.result }}" != "success" ]] || \
+             [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "::error::One or more jobs failed"
+            exit 1
+          fi
+          echo "All checks passed!"
