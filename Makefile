@@ -24,6 +24,47 @@ ifeq ($(GCC_VER_49),1)
 ccflags-y += -Wno-date-time	# Fix compile error && warning on gcc 4.9 and later
 endif
 
+# Clang vs GCC warning suppressions
+IS_CLANG := $(shell $(CC) --version 2>/dev/null | head -1 | grep -qi clang && echo 1 || echo 0)
+ifeq ($(IS_CLANG),1)
+ccflags-y += -Wno-gnu-zero-variadic-macro-arguments
+ccflags-y += -Wno-gnu-statement-expression
+ccflags-y += -Wno-unused-command-line-argument
+else
+ccflags-y += -Wno-date-time
+endif
+
+# Drop clang-only flags from KBUILD_CFLAGS when building a clang-built kernel with gcc
+KERNEL_BUILT_WITH_CLANG := $(shell grep -q '^CONFIG_CC_IS_CLANG=y' $(KSRC)/.config 2>/dev/null && echo 1 || echo 0)
+ifeq ($(KERNEL_BUILT_WITH_CLANG),1)
+ifeq ($(IS_CLANG),0)
+KBUILD_CFLAGS_FILTER := \
+	-fms-anonymous-structs \
+	-mstack-alignment=8 \
+	-mretpoline-external-thunk \
+	-fexperimental-late-parse-attributes \
+	-fsplit-lto-unit \
+	-fdebug-info-for-profiling \
+	-mllvm -enable-fs-discriminator=true \
+	-mllvm -improved-fs-discriminator=true \
+	-fcf-protection=branch \
+	-fno-jump-tables \
+	-falign-loops=1 \
+	-mindirect-branch-cs-prefix \
+	-fstrict-flex-arrays=3 \
+	-fno-stack-clash-protection \
+	-fdiagnostics-show-inlining-chain \
+	-mfentry \
+	-Wno-address-of-packed-member \
+	-Wno-format-overflow-non-kprintf \
+	-Wno-format-truncation-non-kprintf \
+	-Wno-default-const-init-unsafe \
+	-Wno-unterminated-string-initialization \
+	-Wenum-conversion
+KBUILD_CFLAGS := $(filter-out $(KBUILD_CFLAGS_FILTER),$(KBUILD_CFLAGS))
+endif
+endif
+
 ifeq (,$(srctree))
     # make processing
     export TopDIR ?= $(shell pwd)
@@ -2235,16 +2276,23 @@ ifeq ($(CONFIG_RTL8723B), y)
 $(MODULE_NAME)-$(CONFIG_MP_INCLUDED)+= core/rtw_bt_mp.o
 endif
 
-obj-$(CONFIG_RTL8821CE) := $(MODULE_NAME).o
+obj-m := $(MODULE_NAME).o
 
 else
 
-export CONFIG_RTL8821CE = m
+# Default KSRC for external make; auto-detect LLVM from kernel config
+KVER  := $(shell uname -r)
+KSRC ?= /lib/modules/$(KVER)/build
+ifeq ($(LLVM),)
+LLVM := $(shell grep -q '^CONFIG_CC_IS_CLANG=y' $(KSRC)/.config 2>/dev/null && echo 1 || echo 0)
+endif
+
+$(info Auto-detected LLVM=$(LLVM) from kernel config)
 
 all: modules
 
 modules:
-	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KSRC) M=$(shell pwd)  modules
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) LLVM=$(LLVM) CC="$(CC)" -C $(KSRC) M=$(shell pwd)  modules
 
 strip:
 	$(CROSS_COMPILE)strip $(MODULE_NAME).ko --strip-unneeded
@@ -2299,7 +2347,7 @@ config_r:
 .PHONY: modules clean
 
 clean:
-	#$(MAKE) -C $(KSRC) M=$(shell pwd) clean
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) LLVM=$(LLVM) -C $(KSRC) M=$(shell pwd) clean
 	cd hal ; rm -fr */*/*/*.mod.c */*/*/*.mod */*/*/*.o */*/*/.*.cmd */*/*/*.ko
 	cd hal ; rm -fr */*/*.mod.c */*/*.mod */*/*.o */*/.*.cmd */*/*.ko
 	cd hal ; rm -fr */*.mod.c */*.mod */*.o */.*.cmd */*.ko
