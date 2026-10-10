@@ -1,10 +1,16 @@
 # Kernel module build artifacts
 *.o
+*.o.tmp
+*.a
+*.dwo
 *.ko
+*.ko.unsigned
 *.mod.c
 *.mod
 *.cmd
 *.o.d
+*.gcno
+*.gcda
 *.symvers
 *.order
 Module.symvers
@@ -14,8 +20,38 @@ modules.order
 
 # Editor backup files
 *~
+*.swp
+*.swo
+*.swn
 .*.swp
 .*.swo
+\#*\#
+.\#*
+
+# IDE and language tooling
+.vscode/
+.idea/
+.opencode/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+.clangd/
+compile_commands.json
+tags
+TAGS
+cscope.*
+GTAGS
+GRTAGS
+GPATH
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Patch / diff leftovers
+*.orig
+*.rej
+*.bak
 
 # Arch Linux package building
 src/
