@@ -4,7 +4,6 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -13,5 +12,7 @@ jobs:
       run: sudo apt install bc module-assistant build-essential
     - name: prepare build
       run: sudo m-a prepare
-    - name: build
+    - name: build (default config, CONFIG_BR_EXT=y)
       run: make
+    - name: build (CONFIG_BR_EXT=n fallback path)
+      run: make clean && make CONFIG_BR_EXT=n
