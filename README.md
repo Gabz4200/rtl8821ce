@@ -4,7 +4,7 @@
 # Realtek RTL8821CE Driver
 
 ## Intent
-This repository hosts the code for the [Arch Linux AUR Package](https://aur.archlinux.org/packages/rtl8821ce-dkms-git/). It's targeting Linux > 4.14 and is being developed for Arch Linux and Ubuntu 18.10. No support will be provided for other Linux distributions or Linux Kernel versions outside of that range.
+This repository hosts the code for the [Arch Linux AUR Package](https://aur.archlinux.org/packages/rtl8821ce-dkms-git/). Verified to build on Linux 6.18-lts through 7.2+. No support will be provided for other Linux distributions or Linux Kernel versions outside of that range.
 
 ## Disclaimer
 The maintainers of this repository are not Realtek employees and are maintaining this repository for their own usage. Further feature development (such as proper power saving, etc.) will not be pursued here, but will be gladly integrated if newer driver sources are provided by Realtek. Use at your own risk.
@@ -64,6 +64,16 @@ In order to install the driver open a terminal in the directory with the source 
 ```
 sudo ./dkms-install.sh
 ```
+
+### Build notes (kernel 7.1+ and Clang-built kernels)
+
+- Kernels built with Clang/ThinLTO (e.g. default CachyOS 7.x) must build
+  this module with `LLVM=1`. `dkms.conf` auto-detects this per kernel
+  (`CONFIG_CC_IS_CLANG`), so DKMS installs need no manual flags. For a
+  manual build: `make LLVM=1` (or `LLVM=0` on GCC-built kernels).
+- Optional: build with CPU-native tuning instead of the kernel's
+  `-march=x86-64-v3` via `make USER_EXTRA_CFLAGS="-march=native"`.
+  The module must still load on the same machine it was built for.
 
 ## Removal of Driver
 Open a terminal window and git clone the repository to your local disk
