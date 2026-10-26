@@ -4857,20 +4857,21 @@ PHY_ConfigRFWithTxPwrTrackParaFile(
 				if (strlen(szLine) < 10 || szLine[0] != '[')
 					continue;
 
+				/* Fixed-width fields; band/path/sign are zero-initialised above. */
 				memcpy(band, szLine + 1, 2);
 				memcpy(path, szLine + 5, 1);
 				memcpy(sign, szLine + 8, 1);
 
 				i = 10; /* szLine+10 */
-				if (!ParseQualifiedString(szLine, &i, rate, '[', ']')) {
+				if (!ParseQualifiedString(szLine, &i, rate, sizeof(rate), '[', ']')) {
 					/* RTW_INFO("Fail to parse rate!\n"); */
 				}
-				if (!ParseQualifiedString(szLine, &i, chnl, '[', ']')) {
+				if (!ParseQualifiedString(szLine, &i, chnl, sizeof(chnl), '[', ']')) {
 					/* RTW_INFO("Fail to parse channel group!\n"); */
 				}
 				while (szLine[i] != '{' && i < strlen(szLine))
 					i++;
-				if (!ParseQualifiedString(szLine, &i, data, '{', '}')) {
+				if (!ParseQualifiedString(szLine, &i, data, sizeof(data), '{', '}')) {
 					/* RTW_INFO("Fail to parse data!\n"); */
 				}
 
@@ -5079,19 +5080,19 @@ phy_ParsePowerLimitTableFile(
 			_rtw_memset((PVOID) bandwidth, 0, 10);
 			_rtw_memset((PVOID) ntx, 0, 10);
 			_rtw_memset((PVOID) rateSection, 0, 10);
-			if (!ParseQualifiedString(szLine, &i, band, ' ', ',')) {
+			if (!ParseQualifiedString(szLine, &i, band, sizeof(band), ' ', ',')) {
 				RTW_ERR("Fail to parse band!\n");
 				goto exit;
 			}
-			if (!ParseQualifiedString(szLine, &i, bandwidth, ' ', ',')) {
+			if (!ParseQualifiedString(szLine, &i, bandwidth, sizeof(bandwidth), ' ', ',')) {
 				RTW_ERR("Fail to parse bandwidth!\n");
 				goto exit;
 			}
-			if (!ParseQualifiedString(szLine, &i, ntx, ' ', ',')) {
+			if (!ParseQualifiedString(szLine, &i, ntx, sizeof(ntx), ' ', ',')) {
 				RTW_ERR("Fail to parse ntx!\n");
 				goto exit;
 			}
-			if (!ParseQualifiedString(szLine, &i, rateSection, ' ', ',')) {
+			if (!ParseQualifiedString(szLine, &i, rateSection, sizeof(rateSection), ' ', ',')) {
 				RTW_ERR("Fail to parse rate!\n");
 				goto exit;
 			}
@@ -5124,7 +5125,7 @@ phy_ParsePowerLimitTableFile(
 				++i;
 
 			_rtw_memset((PVOID) colNumBuf, 0, 10);
-			if (!ParseQualifiedString(szLine, &i, colNumBuf, '#', '#')) {
+			if (!ParseQualifiedString(szLine, &i, colNumBuf, sizeof(colNumBuf), '#', '#')) {
 				RTW_ERR("Fail to parse column number!\n");
 				goto exit;
 			}

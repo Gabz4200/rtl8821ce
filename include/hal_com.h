@@ -477,11 +477,12 @@ IsCommentString(
 
 BOOLEAN
 ParseQualifiedString(
-	IN	char *In,
-	IN OUT  u32 *Start,
-	OUT	char *Out,
-	IN	char  LeftQualifier,
-	IN	char  RightQualifier
+	IN		char	*In,
+	IN OUT	u32	*Start,
+	OUT		char	*Out,
+	IN		u32	OutLen,
+	IN		char		LeftQualifier,
+	IN		char		RightQualifier
 );
 
 BOOLEAN

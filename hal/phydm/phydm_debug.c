@@ -4141,15 +4141,26 @@ s32 phydm_cmd(struct dm_struct *dm, char *input, u32 in_len, u8 flag,
 	do {
 		token = strsep(&input, ", ");
 		if (token) {
-			strcpy(argv[argc], token);
+			size_t token_len = strlen(token);
+
+			if (argc >= MAX_ARGC)
+				break;
+			/* Keep the parser stack object intact for oversized tokens. */
+			if (token_len >= MAX_ARGV)
+				return -EINVAL;
+			memcpy(argv[argc], token, token_len + 1);
 			argc++;
 		} else {
 			break;
 		}
 	} while (argc < MAX_ARGC);
 
-	if (argc == 1)
-		argv[0][strlen(argv[0]) - 1] = '\0';
+	if (argc == 1) {
+		size_t len = strlen(argv[0]);
+
+		if (len && argv[0][len - 1] == '\n')
+			argv[0][len - 1] = '\0';
+	}
 
 	phydm_cmd_parser(dm, argv, argc, flag, output, out_len);
 

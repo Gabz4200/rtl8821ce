@@ -12188,11 +12188,12 @@ ParseQualifiedString(
 	IN		char	*In,
 	IN OUT	u32	*Start,
 	OUT		char	*Out,
+	IN		u32	OutLen,
 	IN		char		LeftQualifier,
 	IN		char		RightQualifier
 )
 {
-	u32	i = 0, j = 0;
+	u32	i = 0, j = 0, copy_len = 0;
 	char	c = In[(*Start)++];
 
 	if (c != LeftQualifier)
@@ -12207,7 +12208,13 @@ ParseQualifiedString(
 		return _FALSE;
 
 	j = (*Start) - 2;
-	memcpy((char *)Out, (const char *)(In + i), j - i + 1);
+	copy_len = j - i + 1;
+	if (OutLen == 0)
+		return _FALSE;
+	if (copy_len >= OutLen)
+		copy_len = OutLen - 1;
+	memcpy((char *)Out, (const char *)(In + i), copy_len);
+	Out[copy_len] = '\0';
 
 	return _TRUE;
 }

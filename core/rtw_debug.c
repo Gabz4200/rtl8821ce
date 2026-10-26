@@ -432,6 +432,22 @@ void dump_tx_rate_bmp(void *sel, struct dvobj_priv *dvobj)
 	}
 }
 
+static void rtw_dbg_append(char *buf, size_t buflen, char **pp,
+			   const char *src, int len)
+{
+	size_t used = *pp - buf;
+	size_t n;
+
+	if (len <= 0 || used >= buflen)
+		return;
+	n = (size_t)len;
+	if (n > buflen - used - 1)
+		n = buflen - used - 1;
+	memcpy(*pp, src, n);
+	*pp += n;
+	**pp = '\0';
+}
+
 void dump_adapters_status(void *sel, struct dvobj_priv *dvobj)
 {
 	struct rf_ctl_t *rfctl = dvobj_to_rfctl(dvobj);
@@ -533,15 +549,14 @@ void dump_adapters_status(void *sel, struct dvobj_priv *dvobj)
 				char tmp_str[10] = {'\0'};
 
 				len = snprintf(tmp_str, sizeof(tmp_str), "%s", "ap_id:");
-				memcpy(p, tmp_str, len);
-				p += len;
+				rtw_dbg_append(str_val, sizeof(str_val), &p, tmp_str, len);
 				_rtw_memset(&tmp_str, '\0', sizeof(tmp_str));
 				#ifdef DBG_HW_PORT
 				len = snprintf(tmp_str, sizeof(tmp_str), "%d (%d,%d)", iface->vap_id, iface->hw_port, iface->client_port);
 				#else
 				len = snprintf(tmp_str, sizeof(tmp_str), "%d", iface->vap_id);
 				#endif
-				memcpy(p, tmp_str, len);
+				rtw_dbg_append(str_val, sizeof(str_val), &p, tmp_str, len);
 			}
 			#endif
 			#ifdef CONFIG_CLIENT_PORT_CFG
@@ -551,15 +566,14 @@ void dump_adapters_status(void *sel, struct dvobj_priv *dvobj)
 				char tmp_str[10] = {'\0'};
 
 				len = snprintf(tmp_str, sizeof(tmp_str), "%s", "c_pid:");
-				memcpy(p, tmp_str, len);
-				p += len;
+				rtw_dbg_append(str_val, sizeof(str_val), &p, tmp_str, len);
 				_rtw_memset(&tmp_str, '\0', sizeof(tmp_str));
 				#ifdef DBG_HW_PORT
 				len = snprintf(tmp_str, sizeof(tmp_str), "%d (%d,%d)", iface->client_port, iface->hw_port, iface->client_port);
 				#else
 				len = snprintf(tmp_str, sizeof(tmp_str), "%d", iface->client_port);
 				#endif
-				memcpy(p, tmp_str, len);
+				rtw_dbg_append(str_val, sizeof(str_val), &p, tmp_str, len);
 			}
 			#endif
 
@@ -6660,12 +6674,10 @@ inline void RTW_BUF_DUMP_SEL(uint _loglevel, void *sel, u8 *_titlestring,
 		if (_titlestring) {
 			if (sel == RTW_DBGDUMP) {
 				len = snprintf(str_val, sizeof(str_val), "%s", DRIVER_PREFIX);
-				memcpy(p, str_val, len);
-				p += len;
+				rtw_dbg_append(str_out, sizeof(str_out), &p, str_val, len);
 			}
 			len = snprintf(str_val, sizeof(str_val), "%s", _titlestring);
-			memcpy(p, str_val, len);
-			p += len;
+			rtw_dbg_append(str_out, sizeof(str_out), &p, str_val, len);
 		}
 		if (p != &str_out[0]) {
 			_RTW_STR_DUMP_SEL(sel, str_out);
@@ -6679,19 +6691,16 @@ inline void RTW_BUF_DUMP_SEL(uint _loglevel, void *sel, u8 *_titlestring,
 			p = &str_out[0];
 			if (sel == RTW_DBGDUMP) {
 				len = snprintf(str_val, sizeof(str_val), "%s", DRIVER_PREFIX);
-				memcpy(p, str_val, len);
-				p += len;
+				rtw_dbg_append(str_out, sizeof(str_out), &p, str_val, len);
 			}
 			if (_idx_show) {
 				len = snprintf(str_val, sizeof(str_val), "0x%03X: ", __i * RTW_BUFDUMP_BSIZE);
-				memcpy(p, str_val, len);
-				p += len;
+				rtw_dbg_append(str_out, sizeof(str_out), &p, str_val, len);
 			}
 			for (__j =0; __j < RTW_BUFDUMP_BSIZE; __j++) {
 				idx = __i * RTW_BUFDUMP_BSIZE + __j;
 				len = snprintf(str_val, sizeof(str_val), "%02X%s", ptr[idx], (((__j + 1) % 4) == 0) ? "  " : " ");
-				memcpy(p, str_val, len);
-				p += len;
+				rtw_dbg_append(str_out, sizeof(str_out), &p, str_val, len);
 			}
 			_RTW_STR_DUMP_SEL(sel, str_out);
 			_rtw_memset(&str_out, '\0', sizeof(str_out));
@@ -6700,19 +6709,16 @@ inline void RTW_BUF_DUMP_SEL(uint _loglevel, void *sel, u8 *_titlestring,
 		p = &str_out[0];
 		if ((sel == RTW_DBGDUMP) && remain_byte) {
 			len = snprintf(str_val, sizeof(str_val), "%s", DRIVER_PREFIX);
-			memcpy(p, str_val, len);
-			p += len;
+			rtw_dbg_append(str_out, sizeof(str_out), &p, str_val, len);
 		}
 		if (_idx_show && remain_byte) {
 			len = snprintf(str_val, sizeof(str_val), "0x%03X: ", block_num * RTW_BUFDUMP_BSIZE);
-			memcpy(p, str_val, len);
-			p += len;
+			rtw_dbg_append(str_out, sizeof(str_out), &p, str_val, len);
 		}
 		for (__i = 0; __i < remain_byte; __i++) {
 			idx = block_num * RTW_BUFDUMP_BSIZE + __i;
 			len = snprintf(str_val, sizeof(str_val), "%02X%s", ptr[idx], (((__i + 1) % 4) == 0) ? "  " : " ");
-			memcpy(p, str_val, len);
-			p += len;
+			rtw_dbg_append(str_out, sizeof(str_out), &p, str_val, len);
 		}
 		_RTW_STR_DUMP_SEL(sel, str_out);
 	}

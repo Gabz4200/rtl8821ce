@@ -5557,7 +5557,7 @@ hal_btcoex_ParseAntIsolationConfigFile(
 							break;
 						}
 						_rtw_memset((PVOID)param_value_string , 0 , 10);
-						if (!ParseQualifiedString(szLine , &i , param_value_string , '"' , '"')) {
+						if (!ParseQualifiedString(szLine , &i , param_value_string, sizeof(param_value_string) , '"' , '"')) {
 							RTW_INFO("Fail to parse parameters\n");
 							return _FAIL;
 						} else if (!GetU1ByteIntegerFromStringInDecimal(param_value_string , ant_isolation_param[j].value))
