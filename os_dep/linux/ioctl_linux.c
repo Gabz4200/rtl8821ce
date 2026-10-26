@@ -8086,6 +8086,8 @@ _rtw_wowlan_ctrl_exit:
  * I: Destination port (1024: 04:00)
  */
 
+#define RTW_WOWLAN_CMD_MAX 256
+
 static int rtw_wowlan_set_pattern(struct net_device *dev,
 				  struct iw_request_info *info,
 				  union iwreq_data *wrqu, char *extra)
@@ -8096,10 +8098,15 @@ static int rtw_wowlan_set_pattern(struct net_device *dev,
 	struct wowlan_ioctl_param poidparam;
 	int ret = 0, len = 0, i = 0;
 	systime start_time = rtw_get_current_time();
-	u8 input[wrqu->data.length];
+	u8 input[RTW_WOWLAN_CMD_MAX + 1];
 	u8 index = 0;
 
 	poidparam.subcode = 0;
+
+	if (wrqu->data.length == 0 || wrqu->data.length > RTW_WOWLAN_CMD_MAX) {
+		RTW_INFO("ERROR: invalid pattern length %u\n", wrqu->data.length);
+		return -EINVAL;
+	}
 
 	if (!check_fwstate(pmlmepriv, _FW_LINKED) &&
 	    check_fwstate(pmlmepriv, WIFI_STATION_STATE)) {
@@ -8114,9 +8121,9 @@ static int rtw_wowlan_set_pattern(struct net_device *dev,
 		goto _rtw_wowlan_set_pattern_exit;
 	} else {
 		/* set pattern */
-		if (copy_from_user(input,
-				   wrqu->data.pointer, wrqu->data.length))
+		if (copy_from_user(input, wrqu->data.pointer, wrqu->data.length))
 			return -EFAULT;
+		input[wrqu->data.length] = '\0';
 		/* leave PS first */
 		rtw_ps_deny(padapter, PS_DENY_IOCTL);
 		LeaveAllPowerSaveModeDirect(padapter);

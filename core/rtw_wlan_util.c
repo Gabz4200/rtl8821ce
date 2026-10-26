@@ -4304,7 +4304,7 @@ _adapter *dvobj_get_adapter_by_addr(struct dvobj_priv *dvobj, u8 *addr)
 bool rtw_wowlan_parser_pattern_cmd(u8 *input, char *pattern,
 				   int *pattern_len, char *bit_mask)
 {
-	char *cp = NULL, *end = NULL;
+	char *cp = NULL;
 	size_t len = 0;
 	int pos = 0, mask_pos = 0, res = 0;
 	u8 member[2] = {0};
@@ -4324,7 +4324,12 @@ bool rtw_wowlan_parser_pattern_cmd(u8 *input, char *pattern,
 			*cp = 0;
 			cp++;
 		} else
-			len = 2;
+			len = strlen(input);
+
+		if (pos >= MAX_WKFM_PATTERN_SIZE) {
+			RTW_INFO("%s:[ERROR] pattern too long\n", __func__);
+			goto error;
+		}
 
 		if (bit_mask && (strcmp(input, "-") == 0 ||
 				 strcmp(input, "xx") == 0 ||
@@ -4333,7 +4338,17 @@ bool rtw_wowlan_parser_pattern_cmd(u8 *input, char *pattern,
 		} else {
 			u8 hex;
 
-			memcpy(member, input, len);
+			if (len != sizeof(member)) {
+				RTW_INFO("%s:[ERROR] invalid pattern token length %zu\n",
+					 __func__, len);
+				goto error;
+			}
+			if (bit_mask && (pos / 8) >= MAX_WKFM_SIZE) {
+				RTW_INFO("%s:[ERROR] pattern mask too long\n", __func__);
+				goto error;
+			}
+
+			memcpy(member, input, sizeof(member));
 			if (!rtw_check_pattern_valid(member, sizeof(member))) {
 				RTW_INFO("%s:[ERROR] pattern is invalid!!\n",
 					 __func__);
@@ -4341,6 +4356,11 @@ bool rtw_wowlan_parser_pattern_cmd(u8 *input, char *pattern,
 			}
 
 			res = sscanf(member, "%02hhx", &hex);
+			if (res != 1) {
+				RTW_INFO("%s:[ERROR] pattern is invalid!!\n",
+					 __func__);
+				goto error;
+			}
 			pattern[pos] = hex;
 			mask_pos = pos / 8;
 			if (bit_mask)
