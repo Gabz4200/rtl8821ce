@@ -1,13 +1,13 @@
 > [!WARNING]
-> My hardware depends on this driver, and after tomaspinho archived his repository the driver stopped working with newer kernels (>=7.2.9). So I decided to fork it to maintain it to myself, feel free to use it too! But be aware, I am by no means professional in the topic and it is my first time working with driver's code.
-> My most recent test shows the driver now works on linux 7.2.9, my tests happened on a cachyos kernel, but the fix should be universal since it was based on the original kernel's changes that broke compatibility.
+> My hardware depends on this driver, and after tomaspinho archived his repository the driver stopped working with newer kernels (7.3+). So I decided to fork it to maintain it to myself, feel free to use it too! But be aware, I am by no means professional in the topic and it is my first time working with driver's code.
+> My most recent tests pass on Linux 6.18-lts and 7.3 (CachyOS, clang/LTO build). The fixes follow the upstream kernel API changes, so they should work on other distributions too.
 > Anyways, enjoy.
 
 # Realtek RTL8821CE Driver
 
 ## Intent
 
-This repository hosts the code for the [Arch Linux AUR Package](https://aur.archlinux.org/packages/rtl8821ce-dkms-git/). Verified to build on Linux 6.18-lts through 7.3. No support will be provided for other Linux distributions or Linux Kernel versions outside of that range.
+This repository hosts the code for the [Arch Linux AUR Package](https://aur.archlinux.org/packages/rtl8821ce-dkms-git/). Verified to build on Linux 6.18-lts and 7.3. CI builds against current Ubuntu LTS kernels and the latest Arch kernel. No support will be provided for other Linux distributions or Linux Kernel versions outside of that range.
 
 ## Disclaimer
 
@@ -26,7 +26,7 @@ Make sure you have a proper build environment and `dkms` installed.
 The following steps are required prior to building the driver on Ubuntu/Debian:
 
 ```
-sudo apt install bc module-assistant build-essential dkms
+sudo apt install module-assistant build-essential dkms
 sudo m-a prepare
 ```
 
