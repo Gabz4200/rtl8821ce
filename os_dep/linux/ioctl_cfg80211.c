@@ -1665,6 +1665,9 @@ static int cfg80211_rtw_add_key(struct wiphy *wiphy, struct net_device *ndev
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 	char *alg_name;
 	u32 param_len;
@@ -1820,6 +1823,9 @@ static int cfg80211_rtw_get_key(struct wiphy *wiphy, struct net_device *ndev
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 #define GET_KEY_PARAM_FMT_S " keyid=%d"
 #define GET_KEY_PARAM_ARG_S , keyid
@@ -1994,6 +2000,9 @@ static int cfg80211_rtw_del_key(struct wiphy *wiphy, struct net_device *ndev,
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(ndev);
 	struct security_priv *psecuritypriv = &padapter->securitypriv;
@@ -2074,6 +2083,9 @@ int cfg80211_rtw_set_default_mgmt_key(struct wiphy *wiphy,
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 #define SET_DEF_KEY_PARAM_FMT " key_index=%d"
 #define SET_DEF_KEY_PARAM_ARG , key_index
@@ -2234,6 +2246,9 @@ static int cfg80211_rtw_get_station(struct wiphy *wiphy,
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 	int ret = 0;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(ndev);
@@ -5285,6 +5300,9 @@ static int	cfg80211_rtw_add_station(struct wiphy *wiphy, struct net_device *ndev
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 	int ret = 0;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(ndev);
@@ -5462,6 +5480,9 @@ static int	cfg80211_rtw_del_station(struct wiphy *wiphy, struct net_device *ndev
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 	int ret = 0;
 	_irqL irqL;
@@ -5573,6 +5594,9 @@ static int	cfg80211_rtw_change_station(struct wiphy *wiphy, struct net_device *n
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 #ifdef CONFIG_RTW_MESH
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(ndev);
@@ -5729,6 +5753,9 @@ static int	cfg80211_rtw_dump_station(struct wiphy *wiphy, struct net_device *nde
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0))
 	struct net_device *ndev = wdev->netdev;
+
+	if (!ndev)
+		return -EINVAL;
 #endif
 #define DBG_DUMP_STATION 0
 
@@ -6273,6 +6300,19 @@ void rtw_cfg80211_rx_mframe(_adapter *adapter, union recv_frame *rframe, const c
 	ch = rframe->u.hdr.attrib.ch ? rframe->u.hdr.attrib.ch : sch;
 	freq = rtw_ch2freq(ch);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0))
+	/* Honor the cfg80211 ROC transmitter filter (rx_addr). */
+	if (adapter->cfg80211_wdinfo.is_ro_ch &&
+	    adapter->cfg80211_wdinfo.remain_on_ch_rx_addr_valid &&
+	    _rtw_memcmp(get_addr2_ptr(frame),
+			adapter->cfg80211_wdinfo.remain_on_ch_rx_addr,
+			ETH_ALEN) == _FALSE) {
+		RTW_INFO("RTW_Rx: ROC filter drop "MAC_FMT"\n",
+			 MAC_ARG(get_addr2_ptr(frame)));
+		return;
+	}
+#endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)) || defined(COMPAT_KERNEL_RELEASE)
 	rtw_cfg80211_rx_mgmt(wdev, freq, 0, frame, frame_len, GFP_ATOMIC);
 #else
@@ -6558,6 +6598,8 @@ static s32 cfg80211_rtw_update_ft_ies(struct wiphy *wiphy,
 inline void rtw_cfg80211_set_is_roch(_adapter *adapter, bool val)
 {
 	adapter->cfg80211_wdinfo.is_ro_ch = val;
+	if (!val)
+		adapter->cfg80211_wdinfo.remain_on_ch_rx_addr_valid = _FALSE;
 	rtw_mi_update_iface_status(&(adapter->mlmepriv), 0);
 }
 
@@ -6646,6 +6688,13 @@ static s32 cfg80211_rtw_remain_on_channel(struct wiphy *wiphy,
 	pwdev_priv = adapter_wdev_data(padapter);
 	pwdinfo = &padapter->wdinfo;
 	pcfg80211_wdinfo = &padapter->cfg80211_wdinfo;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(7, 2, 0))
+	if (rx_addr) {
+		_rtw_memcpy(pcfg80211_wdinfo->remain_on_ch_rx_addr, rx_addr, ETH_ALEN);
+		pcfg80211_wdinfo->remain_on_ch_rx_addr_valid = _TRUE;
+	} else
+		pcfg80211_wdinfo->remain_on_ch_rx_addr_valid = _FALSE;
+#endif
 #ifdef CONFIG_CONCURRENT_MODE
 	is_p2p_find = (duration < (pwdinfo->ext_listen_interval)) ? _TRUE : _FALSE;
 #endif

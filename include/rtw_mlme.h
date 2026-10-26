@@ -330,6 +330,8 @@ struct cfg80211_wifidirect_info {
 	u64 remain_on_ch_cookie;
 	bool is_ro_ch;
 	struct wireless_dev *ro_ch_wdev;
+	u8 remain_on_ch_rx_addr[ETH_ALEN];
+	bool remain_on_ch_rx_addr_valid;
 	systime last_ro_ch_time; /* this will be updated at the beginning and end of ro_ch */
 };
 #endif /* CONFIG_IOCTL_CFG80211 */
@@ -695,7 +697,7 @@ struct nb_rpt_hdr {
 	u8 phy_type;	
 };
 
-/*IEEE Std 80211v, Figure 7-95e2¡XBSS Termination Duration subelement field format */
+/*IEEE Std 80211v, Figure 7-95e2ï¿½XBSS Termination Duration subelement field format */
 struct btm_term_duration {
 	u8 id;
 	u8 len;
@@ -703,7 +705,7 @@ struct btm_term_duration {
 	u16 duration;
 };
 
-/*IEEE Std 80211v, Figure 7-101n8¡XBSS Transition Management Request frame body format */
+/*IEEE Std 80211v, Figure 7-101n8ï¿½XBSS Transition Management Request frame body format */
 struct btm_req_hdr {
 	u8 req_mode;
 	u16 disassoc_timer;
