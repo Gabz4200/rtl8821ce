@@ -7,7 +7,7 @@
 
 ## Intent
 
-This repository hosts the code for the [Arch Linux AUR Package](https://aur.archlinux.org/packages/rtl8821ce-dkms-git/). Verified to build on Linux 6.18-lts through 7.2+. No support will be provided for other Linux distributions or Linux Kernel versions outside of that range.
+This repository hosts the code for the [Arch Linux AUR Package](https://aur.archlinux.org/packages/rtl8821ce-dkms-git/). Verified to build on Linux 6.18-lts through 7.3. No support will be provided for other Linux distributions or Linux Kernel versions outside of that range.
 
 ## Disclaimer
 
@@ -87,10 +87,16 @@ sudo ./dkms-install.sh
 
 ### Build notes (kernel 7.1+ and Clang-built kernels)
 
-- Kernels built with Clang/ThinLTO (e.g. default CachyOS 7.x) must build
-  this module with `LLVM=1`. `dkms.conf` auto-detects this per kernel
-  (`CONFIG_CC_IS_CLANG`), so DKMS installs need no manual flags. For a
-  manual build: `make LLVM=1` (or `LLVM=0` on GCC-built kernels).
+- The module is built with the same compiler as the target kernel. `Makefile`
+  detects this per kernel (`CONFIG_CC_IS_CLANG`) and passes `LLVM=1` for
+  Clang-built kernels; GCC-built kernels need no flags. `dkms.conf` does the
+  same, so DKMS installs need no manual flags.
+- Kernels built with Clang/ThinLTO or AutoFDO (e.g. default CachyOS 7.x) can
+  only be built with Clang. If Clang is missing the build stops with an
+  explanatory error instead of failing on Clang-only flags.
+- Do not pass `LLVM=0`: modern kbuild rejects any value other than `1`
+  (or empty). On a GCC-built kernel just run `make`; on a Clang-built kernel
+  run `make LLVM=1`.
 - Optional: build with CPU-native tuning instead of the kernel's
   `-march=x86-64-v3` via `make USER_EXTRA_CFLAGS="-march=native"`.
   The module must still load on the same machine it was built for.
