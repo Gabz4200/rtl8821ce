@@ -6,115 +6,92 @@ on:
   pull_request:
     branches: [main, master]
 
-env:
-  KERNEL_VERSIONS: "6.6 6.1 5.15 5.10 5.4"
-
 jobs:
   build:
-    name: Build (kernel ${{ matrix.kernel }})
-    runs-on: ubuntu-latest
+    name: Build (${{ matrix.os }} / ${{ matrix.headers }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        kernel: [6.6, 6.1, 5.15, 5.10, 5.4]
         include:
-          - kernel: 6.6
-            ubuntu: "24.04"
-          - kernel: 6.1
-            ubuntu: "24.04"
-          - kernel: 5.15
-            ubuntu: "22.04"
-          - kernel: 5.10
-            ubuntu: "22.04"
-          - kernel: 5.4
-            ubuntu: "20.04"
-    container:
-      image: ubuntu:${{ matrix.ubuntu }}
-      options: --privileged
+          - os: ubuntu-22.04
+            headers: linux-headers-generic
+          - os: ubuntu-24.04
+            headers: linux-headers-generic
+          - os: ubuntu-24.04
+            headers: linux-headers-generic-hwe-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install kernel headers and build dependencies
         run: |
-          apt-get update
-          apt-get install -y \
-            linux-headers-${{ matrix.kernel }}-generic \
+          sudo apt-get update
+          sudo apt-get install -y \
+            ${{ matrix.headers }} \
             build-essential \
             dkms \
-            bc \
             kmod
 
-      - name: Cache build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            *.o
-            *.ko
-            *.mod
-            *.mod.c
-            .tmp_versions
-            Module.symvers
-            modules.order
-          key: ${{ runner.os }}-${{ matrix.kernel }}-${{ hashFiles('**/*.c', '**/*.h', 'Makefile', 'dkms.conf') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.kernel }}-
+      - name: Resolve installed kernel version
+        run: |
+          KSRC=$(ls -d /usr/src/linux-headers-*-generic 2>/dev/null | sort -V | tail -1)
+          test -n "$KSRC"
+          KVER=${KSRC#/usr/src/linux-headers-}
+          echo "KVER=$KVER" >> "$GITHUB_ENV"
+          echo "KSRC=$KSRC" >> "$GITHUB_ENV"
+          echo "Testing against $KVER"
 
       - name: Build with default config (CONFIG_BR_EXT=y)
-        run: make -j$(nproc) KSRC=/usr/src/linux-headers-${{ matrix.kernel }}-generic
+        run: make -j"$(nproc)" KSRC="$KSRC"
 
       - name: Build with CONFIG_BR_EXT=n
         run: |
           make clean
-          make -j$(nproc) CONFIG_BR_EXT=n KSRC=/usr/src/linux-headers-${{ matrix.kernel }}-generic
+          make -j"$(nproc)" CONFIG_BR_EXT=n KSRC="$KSRC"
 
-      - name: Verify module loads (dry-run)
+      - name: Verify module metadata
         run: |
           modinfo 8821ce.ko
-          # Check for unresolved symbols
-          if modinfo 8821ce.ko | grep -q "depends:"; then
-            echo "Module dependencies: $(modinfo 8821ce.ko | grep 'depends:' | cut -d: -f2)"
-          fi
+          modinfo 8821ce.ko | grep -q '^depends:'
 
       - name: Upload kernel module artifact
         uses: actions/upload-artifact@v4
         with:
-          name: 8821ce-${{ matrix.kernel }}-${{ matrix.ubuntu }}
+          name: 8821ce-${{ matrix.os }}-${{ matrix.headers }}
           path: 8821ce.ko
           retention-days: 7
           if-no-files-found: error
 
-      - name: Test DKMS install (simulated)
-        run: |
-          # Verify dkms.conf is valid
-          grep -E '^PACKAGE_NAME|^PACKAGE_VERSION|^BUILT_MODULE_NAME|^MAKE|^CLEAN|^DEST_MODULE_LOCATION|^AUTOINSTALL' dkms.conf
-          # Check MAKE line expands correctly
-          echo "MAKE line: $(grep '^MAKE' dkms.conf | cut -d= -f2-)"
-
   clang-compat:
     name: Clang Compatibility
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
-      options: --privileged
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install clang and kernel headers
         run: |
-          apt-get update
-          apt-get install -y \
-            linux-headers-6.6-generic \
+          sudo apt-get update
+          sudo apt-get install -y \
+            linux-headers-generic \
             build-essential \
             clang \
             lld \
-            bc \
             kmod
 
-      - name: Build with Clang (LLVM=1)
+      - name: Resolve installed kernel version
         run: |
-          make -j$(nproc) LLVM=1 KSRC=/usr/src/linux-headers-6.6-generic
+          KSRC=$(ls -d /usr/src/linux-headers-*-generic 2>/dev/null | sort -V | tail -1)
+          test -n "$KSRC"
+          KVER=${KSRC#/usr/src/linux-headers-}
+          echo "KVER=$KVER" >> "$GITHUB_ENV"
+          echo "KSRC=$KSRC" >> "$GITHUB_ENV"
+
+      - name: Build with Clang (LLVM=1)
+        run: make -j"$(nproc)" LLVM=1 KSRC="$KSRC"
 
       - name: Verify Clang-built module
         run: |
@@ -123,38 +100,64 @@ jobs:
 
   dkms-test:
     name: DKMS Integration Test
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
-      options: --privileged
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install DKMS and kernel headers
         run: |
-          apt-get update
-          apt-get install -y \
-            linux-headers-6.6-generic \
+          sudo apt-get update
+          sudo apt-get install -y \
+            linux-headers-generic \
             dkms \
             build-essential \
-            bc \
             kmod
+
+      - name: Resolve installed kernel version
+        run: |
+          KSRC=$(ls -d /usr/src/linux-headers-*-generic 2>/dev/null | sort -V | tail -1)
+          test -n "$KSRC"
+          KVER=${KSRC#/usr/src/linux-headers-}
+          echo "KVER=$KVER" >> "$GITHUB_ENV"
+          echo "KSRC=$KSRC" >> "$GITHUB_ENV"
 
       - name: Add module to DKMS
         run: |
           MODULE_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "test")
+          echo "MODULE_VERSION=$MODULE_VERSION" >> "$GITHUB_ENV"
           sudo dkms add -m rtl8821ce -v "$MODULE_VERSION" .
 
       - name: Build module via DKMS
-        run: |
-          MODULE_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "test")
-          sudo dkms build -m rtl8821ce -v "$MODULE_VERSION" -k 6.6.0-$(dpkg --print-architecture)
+        run: sudo dkms build -m rtl8821ce -v "$MODULE_VERSION" -k "$KVER"
 
       - name: Verify DKMS build output
         run: |
-          MODULE_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "test")
-          ls -la /var/lib/dkms/rtl8821ce/$MODULE_VERSION/6.6.0-$(dpkg --print-architecture)/$(dpkg --print-architecture)/module/
+          ls -la "/var/lib/dkms/rtl8821ce/$MODULE_VERSION/$KVER/$(dpkg --print-architecture)/module/"
+
+  latest-kernel:
+    name: Latest kernel (Arch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install git for actions/checkout
+        run: pacman -Syu --noconfirm git
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install kernel headers and build dependencies
+        run: pacman -S --noconfirm --needed base-devel linux-headers kmod
+
+      - name: Build against the current Arch kernel
+        run: |
+          KVER=$(ls /usr/lib/modules | sort -V | tail -1)
+          test -n "$KVER"
+          echo "Testing against $KVER"
+          make -j"$(nproc)" KVER="$KVER"
 
   lint:
     name: Code Quality
@@ -163,21 +166,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check for common kernel coding style issues
+      - name: Check project files for trailing whitespace
         run: |
-          # Check for trailing whitespace
-          if git grep -n '[[:space:]]$' -- '*.c' '*.h' '*.mk' 'Makefile'; then
+          if git grep -n '[[:space:]]$' -- '*.sh' Makefile dkms.conf README.md .gitignore; then
             echo "::error::Trailing whitespace found"
             exit 1
           fi
 
+      - name: Check shell syntax
+        run: |
+          for script in dkms-install.sh dkms-remove.sh get_sources.sh clean; do
+            bash -n "$script"
+          done
+
       - name: Verify Makefile syntax
         run: |
-          make -n 2>&1 | head -20
+          # Parse the Makefile without running recipes. Exit 1 means the
+          # default goal is out of date (normal); exit 2 is a parse error.
+          rc=0
+          make -qp >/dev/null 2>&1 || rc=$?
+          test "$rc" -le 1
 
       - name: Check dkms.conf format
         run: |
-          # Ensure required fields exist
           for field in PACKAGE_NAME PACKAGE_VERSION BUILT_MODULE_NAME MAKE CLEAN DEST_MODULE_LOCATION AUTOINSTALL; do
             if ! grep -q "^$field" dkms.conf; then
               echo "::error::Missing required field: $field"
@@ -188,7 +199,7 @@ jobs:
 
   summary:
     name: Build Summary
-    needs: [build, clang-compat, dkms-test, lint]
+    needs: [build, clang-compat, dkms-test, latest-kernel, lint]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -197,10 +208,12 @@ jobs:
           echo "Build matrix: ${{ needs.build.result }}"
           echo "Clang compat: ${{ needs.clang-compat.result }}"
           echo "DKMS test: ${{ needs.dkms-test.result }}"
+          echo "Latest kernel: ${{ needs.latest-kernel.result }}"
           echo "Lint: ${{ needs.lint.result }}"
           if [[ "${{ needs.build.result }}" != "success" ]] || \
              [[ "${{ needs.clang-compat.result }}" != "success" ]] || \
              [[ "${{ needs.dkms-test.result }}" != "success" ]] || \
+             [[ "${{ needs.latest-kernel.result }}" != "success" ]] || \
              [[ "${{ needs.lint.result }}" != "success" ]]; then
             echo "::error::One or more jobs failed"
             exit 1
