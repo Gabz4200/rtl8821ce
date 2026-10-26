@@ -2287,9 +2287,7 @@ obj-m := $(MODULE_NAME).o
 
 else
 
-# Default KSRC for external make; auto-detect LLVM from the kernel config.
-KVER  ?= $(shell uname -r)
-KSRC  ?= /lib/modules/$(KVER)/build
+# Default KSRC is defined near the top of this file; auto-detect LLVM here.
 ifeq ($(LLVM),)
 LLVM := $(KERNEL_BUILT_WITH_CLANG)
 endif
@@ -2308,7 +2306,12 @@ ifeq ($(KERNEL_NEEDS_CLANG),1)
 $(error This kernel requires clang (CONFIG_LTO_CLANG/AUTOFDO_CLANG/CFI_CLANG=y). Install clang/llvm and build with LLVM=1.)
 endif
 # Also clears an inherited LLVM=0 from MAKEFLAGS, which kbuild rejects.
-KBUILD_TOOLCHAIN_ARG := LLVM= CC="$(CC)"
+# Only forward CC when the user actually set it; make's built-in CC=cc would
+# otherwise override CROSS_COMPILE-prefixed toolchains.
+KBUILD_TOOLCHAIN_ARG := LLVM=
+ifneq ($(origin CC),default)
+KBUILD_TOOLCHAIN_ARG += CC="$(CC)"
+endif
 endif
 
 $(info Auto-detected LLVM=$(LLVM) from kernel config)
@@ -2371,7 +2374,7 @@ config_r:
 .PHONY: modules clean
 
 clean:
-	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) $(KBUILD_TOOLCHAIN_ARG) -C $(KSRC) M=$(shell pwd) clean
+	-@test -d "$(KSRC)" && $(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KSRC) M=$(CURDIR) clean
 	cd hal ; rm -fr */*/*/*.mod.c */*/*/*.mod */*/*/*.o */*/*/.*.cmd */*/*/*.ko
 	cd hal ; rm -fr */*/*.mod.c */*/*.mod */*/*.o */*/.*.cmd */*/*.ko
 	cd hal ; rm -fr */*.mod.c */*.mod */*.o */.*.cmd */*.ko
@@ -2384,5 +2387,6 @@ clean:
 	rm -fr Module.symvers ; rm -fr Module.markers ; rm -fr modules.order
 	rm -fr *.mod.c *.mod *.o .*.cmd *.ko *~
 	rm -fr .tmp_versions
+	find . -name '*.o.tmp' -delete
 endif
 
