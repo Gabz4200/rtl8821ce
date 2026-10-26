@@ -78,6 +78,16 @@ fi
 rm -rf "${SRC_DIR}"
 cp -r . "${SRC_DIR}"
 
+# Drop build artifacts carried over from a previous kernel. DKMS compiles each
+# kernel from source, and stale objects from another kernel's headers can be
+# reused, yielding a module that builds but refuses to load.
+find "${SRC_DIR}" -path "${SRC_DIR}/.git" -prune -o \
+  -type f \( -name '*.o' -o -name '*.o.tmp' -o -name '*.ko' \
+  -o -name '*.ko.unsigned' -o -name '*.mod' -o -name '*.mod.c' \
+  -o -name '.*.cmd' -o -name '*.dwo' -o -name 'modules.order' \
+  -o -name 'Module.symvers' -o -name 'Module.markers' \) -delete
+rm -rf "${SRC_DIR}/.tmp_versions"
+
 # Re-add only if unregistered (per-kernel remove keeps registration).
 if ! dkms status -m ${DRV_NAME} -v ${DRV_VERSION} 2>/dev/null | grep -q .; then
   dkms add -m ${DRV_NAME} -v ${DRV_VERSION} || exit $?
