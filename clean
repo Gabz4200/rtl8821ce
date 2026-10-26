@@ -1,5 +1,23 @@
 #!/bin/bash
-rmmod 8192cu
-rmmod 8192ce
-rmmod 8192du
-rmmod 8192de
+#
+# Unload the rtl8821ce module if it is loaded.
+# Build artifacts are removed by "make clean".
+
+set -u
+
+if [[ $EUID -ne 0 ]]; then
+  echo "You must run this with superuser privileges." >&2
+  exit 1
+fi
+
+if ! lsmod | grep -q '^8821ce '; then
+  echo "8821ce is not loaded."
+  exit 0
+fi
+
+if ! modprobe -r 8821ce; then
+  echo "Failed to unload 8821ce." >&2
+  exit 1
+fi
+
+echo "8821ce unloaded."

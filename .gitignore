@@ -48,6 +48,10 @@ GPATH
 .DS_Store
 Thumbs.db
 
+# Local upstream reference clones (get_sources.sh)
+/linux/
+/vendor/
+
 # Patch / diff leftovers
 *.orig
 *.rej

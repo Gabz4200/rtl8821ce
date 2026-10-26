@@ -1,8 +1,23 @@
 #!/bin/bash
+#
+# Fetch the Endless OS rtl8821ce snapshot as a read-only reference.
+# The fork never copies vendor files over its own tree.
 
-## This script gets the driver sources from Endless OS and bootstraps this repository
-## Make sure to run this (cwd) from the root of the repository 
+set -euo pipefail
 
-git clone --depth=1 git@github.com:endlessm/linux.git
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null) || {
+  echo "Error: not inside a git repository." >&2
+  exit 1
+}
 
-cp -r linux/drivers/net/wireless/rtl8821ce/* .
+dest="$repo_root/vendor/endless"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+git clone --depth=1 https://github.com/endlessm/linux.git "$tmp/linux"
+rm -rf "$dest"
+mkdir -p "$dest"
+cp -a "$tmp/linux/drivers/net/wireless/rtl8821ce/." "$dest/"
+
+echo "Vendor reference updated in $dest"
