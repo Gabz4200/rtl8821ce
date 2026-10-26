@@ -37,6 +37,11 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+if ! command -v dkms >/dev/null 2>&1; then
+  echo "Error: dkms is not installed." 2>&1
+  exit 1
+fi
+
 DRV_NAME=rtl8821ce
 DRV_VERSION=v5.5.2_34066.20200325
 SRC_DIR=/usr/src/${DRV_NAME}-${DRV_VERSION}
@@ -69,18 +74,29 @@ fi
 
 echo "Target kernels: ${KERNELS[*]}"
 
-# Refresh the DKMS source tree. -k clears only that kernel's build.
+# Stage a clean copy first so a failed copy cannot destroy the registered tree.
+TMP_SRC=$(mktemp -d "/usr/src/.${DRV_NAME}.XXXXXX") || exit 1
+trap 'rm -rf "${TMP_SRC}"' EXIT
+tar -C . \
+  --exclude='./.git' --exclude='./.opencode' --exclude='./src' --exclude='./pkg' \
+  --exclude='*.o' --exclude='*.o.tmp' --exclude='*.ko' \
+  --exclude='*.ko.unsigned' --exclude='*.mod' --exclude='*.mod.c' \
+  --exclude='.*.cmd' --exclude='*.dwo' --exclude='modules.order' \
+  --exclude='Module.symvers' --exclude='Module.markers' \
+  --exclude='./.tmp_versions' -cf - . | tar -C "${TMP_SRC}" -xf -
+
+# Refresh the DKMS registration. -k clears only that kernel's build.
 if [[ -n "$TARGET_KVER" ]]; then
   dkms remove -m ${DRV_NAME} -v ${DRV_VERSION} -k "$TARGET_KVER" >/dev/null 2>&1 || true
 else
   dkms remove -m ${DRV_NAME} -v ${DRV_VERSION} --all >/dev/null 2>&1 || true
 fi
-rm -rf "${SRC_DIR}"
-cp -r . "${SRC_DIR}"
 
-# Drop build artifacts carried over from a previous kernel. DKMS compiles each
-# kernel from source, and stale objects from another kernel's headers can be
-# reused, yielding a module that builds but refuses to load.
+rm -rf "${SRC_DIR}"
+mv "${TMP_SRC}" "${SRC_DIR}"
+trap - EXIT
+
+# Safety net for artifacts not covered by the tar excludes above.
 find "${SRC_DIR}" -path "${SRC_DIR}/.git" -prune -o \
   -type f \( -name '*.o' -o -name '*.o.tmp' -o -name '*.ko' \
   -o -name '*.ko.unsigned' -o -name '*.mod' -o -name '*.mod.c' \

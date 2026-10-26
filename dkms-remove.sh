@@ -38,6 +38,11 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+if ! command -v dkms >/dev/null 2>&1; then
+  echo "Error: dkms is not installed." 2>&1
+  exit 1
+fi
+
 DRV_NAME=rtl8821ce
 DRV_VERSION=v5.5.2_34066.20200325
 SRC_DIR=/usr/src/${DRV_NAME}-${DRV_VERSION}
@@ -91,10 +96,13 @@ for kver in ${KERNELS[@]+"${KERNELS[@]}"}; do
   fi
 done
 
-# All-kernels mode only: mop up leftovers and drop the source tree.
-if [[ -z "$TARGET_KVER" ]]; then
+# All-kernels mode only: mop up leftovers and drop the source tree, but keep
+# the tree when a per-kernel removal failed so the user can retry.
+if [[ -z "$TARGET_KVER" && ${#FAILED[@]} -eq 0 ]]; then
   dkms remove -m ${DRV_NAME} -v ${DRV_VERSION} --all >/dev/null 2>&1 || true
   rm -rf "${SRC_DIR}"
+elif [[ ${#FAILED[@]} -gt 0 ]]; then
+  echo "Keeping ${SRC_DIR}: some removals failed." >&2
 fi
 
 echo "Finished running dkms removal steps."
